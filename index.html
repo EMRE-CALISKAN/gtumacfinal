@@ -378,6 +378,12 @@
       });
     }
 
+    // İlk gösterimde bir kare bile sol üst görmemek için senkron uygula
+    function applyTransformSync(){
+      content.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+      if(scaleChip) scaleChip.textContent = `${Math.round(scale / minScale * 100)}%`;
+    }
+
     function computeFitScale(){
       const vw = viewer.clientWidth;
       const vh = viewer.clientHeight;
@@ -472,7 +478,11 @@
     img.addEventListener('load', () => {
       loading.style.display = 'none';
       imgReady = true; maybeHideSplash();
-      resetView();
+      // Reset hesaplarını yap ama transformu senkron uygula, sonra göster
+      minScale = computeFitScale();
+      scale = minScale;
+      centerImage();
+      applyTransformSync();
       // Görsel yüklendi: içeriği görünür yap, etkileşim aç
       content.style.visibility = 'visible';
       controlsLocked = false;
@@ -482,7 +492,11 @@
     if(img.complete) {
       loading.style.display = 'none';
       imgReady = true; maybeHideSplash();
-      resetView();
+      // Reset hesaplarını yap ama transformu senkron uygula, sonra göster
+      minScale = computeFitScale();
+      scale = minScale;
+      centerImage();
+      applyTransformSync();
       content.style.visibility = 'visible';
       controlsLocked = false;
     }
