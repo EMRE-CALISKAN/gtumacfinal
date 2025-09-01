@@ -162,7 +162,7 @@
     /* Transform kapsayıcı: GPU ipucu burada olmalı */
     .content { position: absolute; top: 0; left: 0; transform-origin: 0 0; user-select: none; touch-action: none; will-change: transform; z-index: 1; visibility: hidden; }
     /* Büyük görsel: sade kalsın, bazı tarayıcılarda contain strict çizimi bozabiliyor */
-    img.poster { display: block; width: auto; height: auto; max-width: none; max-height: none; -webkit-user-drag: none; image-rendering: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.45); }
+    img.poster { display: block; width: auto; height: auto; max-width: none; max-height: none; -webkit-user-drag: none; image-rendering: -webkit-optimize-contrast; image-rendering: optimizeQuality; box-shadow: 0 10px 40px rgba(0,0,0,0.45); }
 
     /* Kontroller ve barlar - footer üstünde kal */
     .controls { position: fixed; right: 16px; bottom: calc(var(--footer-h) + var(--bottom-gap) + 20px); z-index: 30; display: flex; gap: 10px; flex-wrap: wrap; opacity: 0; transform: translateY(6px); animation: fadeUp .6s .35s forwards; }
@@ -373,14 +373,24 @@
       // Tek frame'de güncelle (mobilde daha akıcı)
       if(rafId) cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
-        content.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+        // Yüksek kalite için ölçeklemeyi CSS scale ile değil, width/height ile yap
+        content.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
+        if(img && img.naturalWidth && img.naturalHeight){
+          img.style.width = (img.naturalWidth * scale) + 'px';
+          img.style.height = (img.naturalHeight * scale) + 'px';
+        }
         if(scaleChip) scaleChip.textContent = `${Math.round(scale / minScale * 100)}%`;
       });
     }
 
     // İlk gösterimde bir kare bile sol üst görmemek için senkron uygula
     function applyTransformSync(){
-      content.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+      // Yüksek kalite için ölçeklemeyi CSS scale ile değil, width/height ile yap
+      content.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
+      if(img && img.naturalWidth && img.naturalHeight){
+        img.style.width = (img.naturalWidth * scale) + 'px';
+        img.style.height = (img.naturalHeight * scale) + 'px';
+      }
       if(scaleChip) scaleChip.textContent = `${Math.round(scale / minScale * 100)}%`;
     }
 
