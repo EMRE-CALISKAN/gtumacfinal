@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#0b0b0c" />
+  <title>29 Ekim Posteri — Önizleme</title>
+  <meta name="description" content="5000x5000 29 Ekim posteri — yakınlaştır, sürükle, tam ekran gör.">
+  <style>
+    :root{
+      --bg: #0b0b0c;         /* koyu arka plan */
+      --ink: #f2f2f3;        /* açık metin */
+      --muted: #a1a1aa;
+      --accent: #8b0000;     /* koyu kırmızı */
+      --panel: rgba(10,10,12,0.6);
+      --panel-border: rgba(255,255,255,0.12);
+      --panel-hover: rgba(10,10,12,0.78);
+      --footer-h: 60px;      /* alt bar yüksekliği - 3 satır için artırıldı */
+      --bottom-gap: 20px;    /* görev çubuğu/OS için ek boşluk */
+      --topbar-h: 72px;      /* üst bar yüksekliği (mobilde değişecek) */
+    }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      overflow: hidden; /* tek sayfa, kaydırma yok */
+      -webkit-font-smoothing: antialiased;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+
+    /* Splash (giriş yükleme ekranı) */
+    .splash { position: fixed; inset: 0; display: grid; place-items: center; background: #0b0b0c; z-index: 100; transition: opacity .5s ease; overflow: hidden; }
+    .splash-inner { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .splash-logo, .topbar-logo { filter: drop-shadow(0 6px 18px rgba(0,0,0,0.5)); animation: breatheGlow 3.6s ease-in-out infinite; }
+    .splash-logo { width: clamp(80px, 18vw, 140px); height: auto; }
+    .splash-title { font-weight: 800; letter-spacing: 3px; font-size: clamp(18px, 3.8vw, 28px); color: #fff; text-transform: uppercase; }
+    .splash-bar { width: min(280px, 60vw); height: 6px; border-radius: 999px; background: rgba(255,255,255,0.12); overflow: hidden; }
+    .splash-fill { width: 0%; height: 100%; background: var(--accent); border-radius: inherit; animation: fill 1.9s ease-out forwards; will-change: width; }
+    @keyframes fill { to { width: 100%; } }
+    .splash.hidden { opacity: 0; pointer-events: none; }
+
+    /* Splash arkaplan parlamaları */
+    .splash::before { content: ""; position: absolute; inset: -10%; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(700px 500px at 18% 25%, rgba(139,0,0,0.28), transparent 60%),
+        radial-gradient(600px 450px at 80% 70%, rgba(139,0,0,0.22), transparent 62%),
+        radial-gradient(800px 650px at 50% 50%, rgba(139,0,0,0.16), transparent 66%);
+      animation: glowPulse 3.2s ease-in-out infinite;
+    }
+    .splash::after { content: ""; position: absolute; inset: -20%; z-index: 0; pointer-events: none;
+      background: linear-gradient(120deg, transparent 42%, rgba(255,255,255,0.085) 50%, transparent 58%);
+      background-repeat: no-repeat;
+      background-size: 300% 300%;
+      background-position: -140% -140%; /* start offscreen */
+      will-change: background-position, transform;
+      transform: translateZ(0);
+      animation: sheenSplash 1.8s linear infinite;
+      animation-fill-mode: both;
+      opacity: .8;
+    }
+    @keyframes glowPulse { 0%,100% { opacity: .35; } 50% { opacity: .7; } }
+    @keyframes sheen { 0% { background-position: -150% -150%; } 100% { background-position: 150% 150%; } }
+    @keyframes sheenStart { 0% { background-position: -150% -150%; } 100% { background-position: -140% -140%; } }
+    /* Başlar başlamaz görünür ve ilk turu hızlı tamamlar */
+    @keyframes sheenSplash {
+      0% { background-position: -140% -140%; } /* offscreen */
+      18% { background-position: -60% -60%; }
+      38% { background-position: 0% 0%; }  /* merkez daha erken */
+      68% { background-position: 50% 50%; }
+      100% { background-position: 120% 120%; } /* exit fast */
+    }
+
+    /* Logo ve CALISKAN için hafif nefes alma parlaması */
+    @keyframes breatheGlow { 0%, 100% { filter: drop-shadow(0 4px 14px rgba(255,255,255,0.18)); } 50% { filter: drop-shadow(0 6px 20px rgba(255,255,255,0.34)); } }
+
+    /* Üst bar */
+    .topbar { position: fixed; inset: 0 0 auto 0; height: var(--topbar-h); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; background: rgba(10,10,12,0.72); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 20; opacity: 0; transform: translateY(-10px); animation: fadeDown .6s .2s forwards; }
+    @keyframes fadeDown { to { opacity: 1; transform: translateY(0); } }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; letter-spacing: 0.2px; }
+    .brand-badge { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px rgba(139,0,0,0.25); }
+    .brand small, .byline { color: var(--muted); font-weight: 500; display: block; }
+
+    /* Yeni üst bar düzeni */
+    .topbar-left { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
+    .topbar-right { display: flex; align-items: center; gap: 14px; }
+    .poster-title { font-weight: 800; color: #fff; font-size: 15px; letter-spacing: 0.25px; }
+    .poster-meta { color: var(--muted); font-weight: 600; font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .byline b { color: #fff; font-weight: 800; }
+
+    /* Exit fullscreen floating button */
+    .exit-fs { position: absolute; top: 12px; right: 12px; z-index: 40; }
+    
+    /* Üst bar ortasındaki logo */
+    .topbar-center { 
+      position: absolute; 
+      left: 50%; 
+      top: 50%; 
+      transform: translate(-50%, -50%); 
+      display: flex; 
+      align-items: center; 
+      gap: 10px;
+      opacity: 0;
+      animation: fadeCenter .6s .4s forwards;
+    }
+    @keyframes fadeCenter { to { opacity: 1; } }
+    .topbar-logo { 
+      width: 40px; 
+      height: 40px; 
+    }
+    .topbar-brand { 
+      font-weight: 900; 
+      letter-spacing: 2.6px; 
+      font-size: 18px; 
+      color: #fff; 
+      text-transform: uppercase;
+      animation: textGlow 3.6s ease-in-out infinite;
+    }
+
+    @keyframes textGlow { 0%, 100% { text-shadow: 0 0 0 rgba(255,255,255,0); } 50% { text-shadow: 0 0 12px rgba(255,255,255,0.35); } }
+
+    /* Görüntüleyici alan - footer ve OS barı için yer bırak */
+    #viewer { position: fixed; inset: var(--topbar-h) 0 calc(var(--footer-h) + var(--bottom-gap)) 0; overflow: hidden; background: var(--bg); isolation: isolate; }
+    /* Arkadaki beyaz şerit (sheen) - içerik altında, boş alanı canlı tutsun */
+    #viewer::before{ content: ""; position: absolute; inset: -20%; pointer-events: none; 
+      background: linear-gradient(120deg, transparent 42%, rgba(255,255,255,0.055) 50%, transparent 58%);
+      background-repeat: no-repeat;
+      background-size: 260% 260%;
+      animation: sheen 4.6s linear infinite alternate;
+      opacity: .5; }
+    /* Koyu parlamalar - içerik üstünde, multiply ile hafif gölge etkisi */
+    #viewer::after{ content: ""; position: absolute; inset: -10%; pointer-events: none; background:
+        radial-gradient(1200px 800px at 10% 10%, rgba(0,0,0,0.18), transparent 60%),
+        radial-gradient(1000px 700px at 90% 15%, rgba(0,0,0,0.14), transparent 60%),
+        radial-gradient(1200px 900px at 15% 90%, rgba(0,0,0,0.16), transparent 60%),
+        radial-gradient(1100px 800px at 85% 85%, rgba(0,0,0,0.18), transparent 60%),
+        radial-gradient(1200px 1200px at 50% -10%, rgba(0,0,0,0.12), transparent 60%),
+        radial-gradient(1200px 1200px at 50% 110%, rgba(0,0,0,0.12), transparent 60%);
+      mix-blend-mode: multiply; }
+
+    /* Mobilde birleşme efektini azalt */
+    @media (max-width: 600px){
+      #viewer::before{
+        opacity: .24;
+        background: linear-gradient(120deg, transparent 48%, rgba(255,255,255,0.04) 50%, transparent 52%);
+        background-size: 320% 320%;
+        animation-duration: 5.2s;
+      }
+      .splash::after{
+        background: linear-gradient(120deg, transparent 48%, rgba(255,255,255,0.085) 50%, transparent 52%);
+        background-size: 360% 360%;
+        background-position: -120% -120%; /* offscreen start for mobile */
+        animation: sheenSplash 2.2s linear infinite;
+        animation-fill-mode: both;
+        opacity: .78;
+      }
+    }
+
+    /* İçerik (transform uygulanacak kapsayıcı) */
+    /* Transform kapsayıcı: GPU ipucu burada olmalı */
+    .content { position: absolute; top: 0; left: 0; transform-origin: 0 0; user-select: none; touch-action: none; will-change: transform; }
+    /* Büyük görsel: sade kalsın, bazı tarayıcılarda contain strict çizimi bozabiliyor */
+    img.poster { display: block; width: auto; height: auto; max-width: none; max-height: none; -webkit-user-drag: none; image-rendering: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.45); }
+
+    /* Kontroller ve barlar - footer üstünde kal */
+    .controls { position: fixed; right: 16px; bottom: calc(var(--footer-h) + var(--bottom-gap) + 20px); z-index: 30; display: flex; gap: 10px; flex-wrap: wrap; opacity: 0; transform: translateY(6px); animation: fadeUp .6s .35s forwards; }
+    .btn { appearance: none; border: 1px solid var(--panel-border); background: var(--panel); color: #fff; padding: 10px 12px; border-radius: 12px; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; letter-spacing: .2px; transition: background .2s ease, transform .06s ease, border-color .2s ease, box-shadow .2s ease; backdrop-filter: blur(6px); }
+    .btn:hover { background: var(--panel-hover); }
+    .btn:active { transform: translateY(1px); }
+    .btn .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px rgba(139,0,0,0.35); }
+    .btn.small { padding: 8px; border-radius: 10px; }
+
+    .zoombar { position: fixed; left: 16px; bottom: calc(var(--footer-h) + var(--bottom-gap) + 20px); z-index: 30; display: flex; gap: 8px; opacity: 0; animation: fadeUp .6s .3s forwards; }
+
+    /* Orta grup: ölçek + görsel geçiş butonları birlikte, tam ortada */
+    .ui-center { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--footer-h) + var(--bottom-gap) + 20px); z-index: 30; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .scale-chip { color: #fff; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 999px; padding: 8px 12px; font-weight: 600; backdrop-filter: blur(6px); opacity: 0; animation: fadeUp .6s .45s forwards; }
+    .toggles { display: flex; gap: 8px; }
+    .btn.toggle.active { border-color: rgba(139,0,0,0.7); box-shadow: inset 0 0 0 1px rgba(139,0,0,0.5); }
+
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Bilgi katmanı */
+    .hint { position: fixed; top: 72px; right: 16px; z-index: 25; background: var(--panel); color: #fff; border: 1px solid var(--panel-border); border-radius: 12px; padding: 10px 12px; max-width: min(420px, calc(100% - 32px)); backdrop-filter: blur(6px); line-height: 1.45; }
+    .hint b { color: #fff; }
+
+    /* Yükleniyor göstergesi (resim yüklenirken) */
+    .loading { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 10; background: linear-gradient(180deg, rgba(0,0,0,0.3), rgba(0,0,0,0.15)); backdrop-filter: blur(2px); }
+    .spinner { width: 44px; height: 44px; border-radius: 50%; border: 3px solid rgba(139,0,0,0.25); border-top-color: var(--accent); animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Alt bilgi */
+    .footer { 
+      position: fixed; 
+      left: 0; 
+      right: 0; 
+      bottom: var(--bottom-gap); 
+      height: var(--footer-h); 
+      z-index: 35; 
+      display: flex; 
+      flex-direction: column;
+      align-items: center; 
+      justify-content: center; 
+      color: #ddd; 
+      background: rgba(10,10,12,0.7); 
+      backdrop-filter: blur(8px); 
+      border-top: 1px solid rgba(255,255,255,0.06); 
+      font-size: 13px; 
+      letter-spacing: .2px;
+      line-height: 1.2;
+      padding: 0;
+      box-sizing: border-box;
+      text-align: center;
+      gap: 1px;
+    }
+    .footer b { 
+      color: #fff; 
+      padding: 0;
+      line-height: 1.2;
+      display: block;
+      width: 100%;
+      font-weight: 700; 
+    }
+    .footer div { 
+      margin: 0; 
+      padding: 0;
+      line-height: 1.2;
+      display: block;
+      width: 100%;
+    }
+
+    /* Küçük ekranlar için ufak ayarlar */
+    @media (max-width: 600px){
+      :root { --footer-h: 0px; --bottom-gap: 0px; --topbar-h: 56px; }
+      /* Üst bar ortasındaki logo/brand'ı mobilde gizle - yer aç */
+      .topbar-center { display: none; }
+      /* Başlık tek satır, meta alt satıra düşsün */
+      .poster-title { font-size: 14px; white-space: nowrap; }
+      .poster-meta { font-size: 12px; }
+      .byline { display: block; width: 100%; }
+      .byline b { display: inline; }
+      /* Footer'ı mobilde gizle - yer kazancı */
+      .footer { display: none; }
+      /* Zoom bar ve reset’i sol üst/sağ üst köşeye taşı */
+      .zoombar { left: 8px; bottom: auto; top: calc(var(--topbar-h) + 8px); }
+      .ui-center { position: fixed; left: auto; transform: none; bottom: auto; right: 8px; top: calc(var(--topbar-h) + 8px); gap: 6px; align-items: flex-end; }
+      .scale-chip { font-size: 12px; padding: 6px 10px; }
+      .toggles { gap: 6px; }
+      /* Buton boyutlarını küçült */
+      .btn { padding: 8px 10px; font-size: 13px; }
+      .btn.small { padding: 6px 8px; }
+      /* Hint'i kapat, yer aç */
+      .hint { display: none; }
+      /* Daha hafif efektler */
+      .splash::after { opacity: .5; }
+      #viewer::before { opacity: .18; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Splash ekranı -->
+  <div class="splash" id="splash">
+    <div class="splash-inner">
+      <img src="ecwhite.png" alt="CALISKAN logo" class="splash-logo" />
+      <div class="splash-title">CALISKAN</div>
+      <div class="splash-bar"><div class="splash-fill"></div></div>
+    </div>
+  </div>
+
+  <header class="topbar" role="banner">
+    <div class="topbar-left" aria-label="Poster bilgileri">
+      <div class="poster-title">29 Ekim Posteri</div>
+      <div class="poster-meta">GTU MBG CLUB<span class="byline">TASARIM: <b>EMRE ÇALIŞKAN</b></span></div>
+    </div>
+
+    <div class="topbar-center">
+      <img src="ecwhite.png" alt="CALISKAN Logo" class="topbar-logo" />
+      <span class="topbar-brand">CALISKAN</span>
+    </div>
+
+    <div class="topbar-right">
+      <button class="btn" id="fullscreenBtn" title="Tam ekran">
+        <span class="dot" aria-hidden="true"></span>
+        Tam ekran
+      </button>
+    </div>
+  </header>
+
+  <main id="viewer" role="main" aria-label="Poster görüntüleyici">
+    <button class="btn small exit-fs" id="exitFsBtn" title="Tam ekrandan çık" style="display:none">
+      Tam ekrandan çık
+    </button>
+    <div class="loading" id="loading" aria-hidden="true">
+      <div class="spinner" aria-label="Yükleniyor"></div>
+    </div>
+
+    <div class="content" id="content">
+      <picture>
+        <!-- SADECE JPEG kullan (WebP yoksa seçip bozmasın) -->
+        <img id="poster" class="poster" alt="29 Ekim Cumhuriyet Bayramı posteri" draggable="false" loading="eager" decoding="async" fetchpriority="high" />
+      </picture>
+    </div>
+
+    <section class="hint" id="hint">
+      <b>İpucu</b>: Görseli sürükleyerek hareket ettir, fare tekeri veya mobilde iki parmak ile yakınlaştır/uzaklaştır. Çift tık/tap ile hızlı yakınlaştır. Reset için çift tık + Shift.
+    </section>
+  </main>
+
+  <div class="zoombar" aria-label="Yakınlaştırma kontrolü">
+    <button class="btn small" id="zoomOutBtn" title="Uzaklaştır" aria-label="Uzaklaştır">−</button>
+    <button class="btn small" id="zoomInBtn" title="Yakınlaştır" aria-label="Yakınlaştır">+</button>
+    <button class="btn" id="resetBtn" title="Sıfırla">Sıfırla</button>
+  </div>
+
+  <!-- Orta grup (tam ortada): ölçek ve görsel geçiş -->
+  <div class="ui-center">
+    <div class="scale-chip" id="scaleChip" aria-live="polite">%100</div>
+    <div class="toggles" aria-label="Görsel seçimi">
+      <button class="btn toggle small active" id="image1Btn" title="Görsel 1">Görsel 1</button>
+      <button class="btn toggle small" id="image2Btn" title="Görsel 2">Görsel 2</button>
+    </div>
+  </div>
+
+  <footer class="footer" role="contentinfo">
+    <div>© 2025</div>
+    <div><b>EMRECALISKAN</b></div>
+    <div>GEBZE TECHNICAL UNIVERSITY</div>
+  </footer>
+
+  <script>
+    // Basit pan/zoom görüntüleyici
+    const viewer = document.getElementById('viewer');
+    const content = document.getElementById('content');
+    const img = document.getElementById('poster');
+    const loading = document.getElementById('loading');
+    const scaleChip = document.getElementById('scaleChip');
+    const hint = document.getElementById('hint');
+
+    const splash = document.getElementById('splash');
+
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const exitFsBtn = document.getElementById('exitFsBtn');
+
+    const image1Btn = document.getElementById('image1Btn');
+    const image2Btn = document.getElementById('image2Btn');
+
+    let scale = 1;
+    let minScale = 1;
+    let maxScale = window.matchMedia('(max-width: 600px)').matches ? 4 : 8; // mobilde daha düşük üst sınır
+    let tx = 0, ty = 0; // çeviri
+
+    // Çoklu işaretçi (pinch) takibi
+    const pointers = new Map();
+    let pinchStart = null; // { distance, scale, centerX, centerY }
+
+    const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+
+    let rafId = null;
+    function applyTransform(){
+      // Tek frame'de güncelle (mobilde daha akıcı)
+      if(rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        content.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+        if(scaleChip) scaleChip.textContent = `${Math.round(scale / minScale * 100)}%`;
+      });
+    }
+
+    function computeFitScale(){
+      const vw = viewer.clientWidth;
+      const vh = viewer.clientHeight;
+      const iw = img.naturalWidth;
+      const ih = img.naturalHeight;
+      if(!iw || !ih) return 1;
+      return Math.min(vw / iw, vh / ih);
+    }
+
+    function centerImage(){
+      const vw = viewer.clientWidth;
+      const vh = viewer.clientHeight;
+      const iw = img.naturalWidth * scale;
+      const ih = img.naturalHeight * scale;
+      tx = (vw - iw) / 2;
+      ty = (vh - ih) / 2;
+    }
+
+    function resetView(){
+      minScale = computeFitScale();
+      scale = minScale;
+      centerImage();
+      applyTransform();
+    }
+
+    function pointToContent(px, py){
+      return { x: (px - tx) / scale, y: (py - ty) / scale };
+    }
+
+    function zoomAt(px, py, factor){
+      const before = pointToContent(px, py);
+      const newScale = clamp(scale * factor, minScale * 0.98, maxScale);
+      scale = newScale;
+      const afterX = before.x * scale;
+      const afterY = before.y * scale;
+      tx = px - afterX;
+      ty = py - afterY;
+      applyTransform();
+    }
+
+    function hideHintSoon(){
+      if(!hint) return;
+      hint.style.transition = 'opacity .4s ease';
+      hint.style.opacity = '0';
+      setTimeout(()=>{ hint.style.display = 'none'; }, 450);
+    }
+
+    function setActiveImageButton(which){
+      if(which === 1){ image1Btn.classList.add('active'); image2Btn.classList.remove('active'); }
+      else { image2Btn.classList.add('active'); image1Btn.classList.remove('active'); }
+    }
+
+    function switchImage(src){
+      if(!src) return;
+      loading.style.display = '';
+      img.src = src; // load event aşağıda resetView çağırır
+    }
+
+    // Görsel yüklenemezse yükleme katmanını kaldır ve uyarı yaz
+    img.addEventListener('error', () => {
+      loading.style.display = 'none';
+      imgReady = true; maybeHideSplash();
+      hint && (hint.style.display = 'block', hint.textContent = 'Görsel yüklenemedi. Dosya adını/görünürlüğünü kontrol edin.');
+    });
+
+    // Görselleri önbelleğe al (geçiş hızlı olsun)
+    // Küçük ekranlarda 2x downscale edilmiş görselleri tercih et (varsa)
+    const isSmallScreen = window.matchMedia('(max-width: 600px)').matches;
+    const IMG1 = isSmallScreen && false ? 'ekim29-small.jpg' : 'ekim29.jpg';
+    const IMG2 = isSmallScreen && false ? 'ekim29-2-small.jpg' : 'ekim29-2.jpg';
+    ;[IMG1, IMG2].forEach(p => { const im = new Image(); im.src = p; });
+
+    // İlk görseli JS ile tak - önce eventleri bağlayalım sonra src verelim ki load kaçmasın
+    window.requestAnimationFrame(() => { img.src = IMG1; });
+
+    // Splash minimum süre + görsel hazır olunca kalksın
+    let splashMin = false, imgReady = false;
+    setTimeout(()=>{ splashMin = true; maybeHideSplash(); }, 1900);
+    function maybeHideSplash(){ if(splashMin && imgReady) hideSplash(); }
+    function hideSplash(){ if(!splash || splash.classList.contains('hidden')) return; splash.classList.add('hidden'); setTimeout(()=>{ splash.style.display = 'none'; }, 600); }
+
+    img.addEventListener('load', () => {
+      loading.style.display = 'none';
+      imgReady = true; maybeHideSplash();
+      resetView();
+    });
+
+    // Eğer resim cache'ten geldiyse load tetiklenmiş olabilir
+    if(img.complete) {
+      loading.style.display = 'none';
+      imgReady = true; maybeHideSplash();
+      resetView();
+    }
+
+    // Pan (sürükle)
+    let dragging = false; let lastX = 0, lastY = 0;
+    function onPointerDown(e){
+      viewer.setPointerCapture?.(e.pointerId);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if(pointers.size === 1){ dragging = true; lastX = e.clientX; lastY = e.clientY; }
+      else if(pointers.size === 2){
+        const pts = [...pointers.values()];
+        const dx = pts[1].x - pts[0].x; const dy = pts[1].y - pts[0].y;
+        const distance = Math.hypot(dx, dy);
+        const centerX = (pts[0].x + pts[1].x) / 2; const centerY = (pts[0].y + pts[1].y) / 2;
+        pinchStart = { distance, scale, centerX, centerY };
+      }
+      hideHintSoon();
+    }
+    function onPointerMove(e){
+      if(pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if(pointers.size === 1 && dragging){
+        const dx = e.clientX - lastX; const dy = e.clientY - lastY;
+        lastX = e.clientX; lastY = e.clientY; tx += dx; ty += dy; applyTransform();
+      } else if(pointers.size === 2 && pinchStart){
+        const pts = [...pointers.values()];
+        const dx = pts[1].x - pts[0].x; const dy = pts[1].y - pts[0].y;
+        const distance = Math.hypot(dx, dy); const centerX = (pts[0].x + pts[1].x) / 2; const centerY = (pts[0].y + pts[1].y) / 2;
+        const factor = distance / pinchStart.distance; const targetScale = clamp(pinchStart.scale * factor, minScale * 0.98, maxScale);
+        const before = pointToContent(pinchStart.centerX, pinchStart.centerY);
+        scale = targetScale; const afterX = before.x * scale; const afterY = before.y * scale;
+        tx = pinchStart.centerX - afterX; ty = pinchStart.centerY - afterY; applyTransform();
+      }
+    }
+    function onPointerUp(e){ pointers.delete(e.pointerId); if(pointers.size < 2){ pinchStart = null; } if(pointers.size === 0){ dragging = false; } }
+    viewer.addEventListener('pointerdown', onPointerDown);
+    viewer.addEventListener('pointermove', onPointerMove);
+    viewer.addEventListener('pointerup', onPointerUp);
+    viewer.addEventListener('pointercancel', onPointerUp);
+    viewer.addEventListener('pointerleave', onPointerUp);
+
+    // Tekerlek ile zoom
+    viewer.addEventListener('wheel', (e) => { e.preventDefault(); const delta = e.deltaY < 0 ? 1.12 : 0.9; zoomAt(e.clientX, e.clientY, delta); hideHintSoon(); }, { passive: false });
+
+    // Çift tık/tap: yakınlaştır, Shift ile reset
+    viewer.addEventListener('dblclick', (e) => { if(e.shiftKey){ resetView(); return; } zoomAt(e.clientX, e.clientY, 1.5); hideHintSoon(); });
+
+    // Pencere boyutu değişince minimum ölçek güncelle
+    let resizeTimer; window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => {
+      const prevCenter = { x: viewer.clientWidth / 2, y: viewer.clientHeight / 2 };
+      const before = pointToContent(prevCenter.x, prevCenter.y);
+      minScale = computeFitScale();
+      if(scale < minScale){ scale = minScale; centerImage(); }
+      else { tx = prevCenter.x - before.x * scale; ty = prevCenter.y - before.y * scale; }
+      applyTransform();
+      // Sadece resize sırasında footer kontrolü yap
+      setTimeout(ensureFooterVisible, 50);
+    }, 120); });
+
+    // Butonlar
+    zoomInBtn.addEventListener('click', () => { const rect = viewer.getBoundingClientRect(); zoomAt(rect.width/2, rect.height/2, 1.2); });
+    zoomOutBtn.addEventListener('click', () => { const rect = viewer.getBoundingClientRect(); zoomAt(rect.width/2, rect.height/2, 0.8333); });
+    resetBtn.addEventListener('click', resetView);
+
+    // Tam ekran
+    function isFullscreen(){
+      return document.fullscreenElement === viewer ||
+             document.webkitFullscreenElement === viewer ||
+             document.mozFullScreenElement === viewer ||
+             document.msFullscreenElement === viewer;
+    }
+
+    async function enterFullscreen(){
+      try {
+        if(viewer.requestFullscreen) await viewer.requestFullscreen();
+        else if(viewer.webkitRequestFullscreen) await viewer.webkitRequestFullscreen();
+        else if(viewer.mozRequestFullScreen) await viewer.mozRequestFullScreen();
+        else if(viewer.msRequestFullscreen) await viewer.msRequestFullscreen();
+      } catch(err){ console.warn(err); }
+    }
+
+    async function exitFullscreen(){
+      try {
+        if(document.exitFullscreen) await document.exitFullscreen();
+        else if(document.webkitExitFullscreen) await document.webkitExitFullscreen();
+        else if(document.mozCancelFullScreen) await document.mozCancelFullScreen();
+        else if(document.msExitFullscreen) await document.msExitFullscreen();
+      } catch(err){ console.warn(err); }
+    }
+
+    fullscreenBtn.addEventListener('click', async () => {
+      if(!isFullscreen()) await enterFullscreen(); else await exitFullscreen();
+    });
+
+    exitFsBtn.addEventListener('click', async () => { if(isFullscreen()) await exitFullscreen(); });
+
+    function onFsChange(){
+      const entering = isFullscreen();
+      fullscreenBtn.innerHTML = entering
+        ? '<span class="dot" aria-hidden="true"></span> Tam ekrandan çık'
+        : '<span class="dot" aria-hidden="true"></span> Tam ekran';
+      exitFsBtn.style.display = entering ? 'inline-flex' : 'none';
+    }
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
+    document.addEventListener('mozfullscreenchange', onFsChange);
+    document.addEventListener('MSFullscreenChange', onFsChange);
+
+    // Görsel seçimi
+    image1Btn.addEventListener('click', () => { setActiveImageButton(1); switchImage(IMG1); });
+    image2Btn.addEventListener('click', () => { setActiveImageButton(2); switchImage(IMG2); });
+
+    // Dokunmatik kaydırma momentumunu engelle (biz kontrol ediyoruz)
+    viewer.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
+
+    // İpucu: otomatik kaybolsun (3.5sn sonra)
+    setTimeout(hideHintSoon, 3500);
+
+    // Footer görünür kalsın: sadece gerektiğinde minimal müdahale
+    function ensureFooterVisible(){
+      const f = document.querySelector('.footer');
+      if(!f) return;
+      const rect = f.getBoundingClientRect();
+      // Eğer footer zaten görünüyorsa dokunma!
+      if(rect.bottom <= window.innerHeight - 5) return;
+      
+      const currentGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--bottom-gap')) || 20;
+      const needed = Math.ceil(rect.bottom - window.innerHeight + 10);
+      if(needed > 0) {
+        document.documentElement.style.setProperty('--bottom-gap', (currentGap + needed) + 'px');
+      }
+    }
+    // Sadece pencere boyutu değişince çalıştır - sayfa yüklenirken DEĞİL!
+  </script>
+</body>
+</html>
