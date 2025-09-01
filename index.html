@@ -160,7 +160,7 @@
 
     /* İçerik (transform uygulanacak kapsayıcı) */
     /* Transform kapsayıcı: GPU ipucu burada olmalı */
-    .content { position: absolute; top: 0; left: 0; transform-origin: 0 0; user-select: none; touch-action: none; will-change: transform; z-index: 1; }
+    .content { position: absolute; top: 0; left: 0; transform-origin: 0 0; user-select: none; touch-action: none; will-change: transform; z-index: 1; visibility: hidden; }
     /* Büyük görsel: sade kalsın, bazı tarayıcılarda contain strict çizimi bozabiliyor */
     img.poster { display: block; width: auto; height: auto; max-width: none; max-height: none; -webkit-user-drag: none; image-rendering: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.45); }
 
@@ -403,6 +403,9 @@
       applyTransform();
     }
 
+    // Sayfa ilk açılışta merkezde ve sığdırılmış başlasın; görsel yüklenmeden pan/zoom kilitli
+    let controlsLocked = true;
+
     function pointToContent(px, py){
       return { x: (px - tx) / scale, y: (py - ty) / scale };
     }
@@ -470,6 +473,9 @@
       loading.style.display = 'none';
       imgReady = true; maybeHideSplash();
       resetView();
+      // Görsel yüklendi: içeriği görünür yap, etkileşim aç
+      content.style.visibility = 'visible';
+      controlsLocked = false;
     });
 
     // Eğer resim cache'ten geldiyse load tetiklenmiş olabilir
@@ -477,11 +483,14 @@
       loading.style.display = 'none';
       imgReady = true; maybeHideSplash();
       resetView();
+      content.style.visibility = 'visible';
+      controlsLocked = false;
     }
 
     // Pan (sürükle)
     let dragging = false; let lastX = 0, lastY = 0;
     function onPointerDown(e){
+      if(controlsLocked) return; // görsel hazır olmadan etkileşim kapalı
       viewer.setPointerCapture?.(e.pointerId);
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if(pointers.size === 1){ dragging = true; lastX = e.clientX; lastY = e.clientY; }
@@ -495,6 +504,7 @@
       hideHintSoon();
     }
     function onPointerMove(e){
+      if(controlsLocked) return;
       if(pointers.has(e.pointerId)) pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if(pointers.size === 1 && dragging){
         const dx = e.clientX - lastX; const dy = e.clientY - lastY;
@@ -517,10 +527,10 @@
     viewer.addEventListener('pointerleave', onPointerUp);
 
     // Tekerlek ile zoom
-    viewer.addEventListener('wheel', (e) => { e.preventDefault(); const delta = e.deltaY < 0 ? 1.12 : 0.9; zoomAt(e.clientX, e.clientY, delta); hideHintSoon(); }, { passive: false });
+    viewer.addEventListener('wheel', (e) => { if(controlsLocked) return; e.preventDefault(); const delta = e.deltaY < 0 ? 1.12 : 0.9; zoomAt(e.clientX, e.clientY, delta); hideHintSoon(); }, { passive: false });
 
     // Çift tık/tap: yakınlaştır, Shift ile reset
-    viewer.addEventListener('dblclick', (e) => { if(e.shiftKey){ resetView(); return; } zoomAt(e.clientX, e.clientY, 1.5); hideHintSoon(); });
+    viewer.addEventListener('dblclick', (e) => { if(controlsLocked) return; if(e.shiftKey){ resetView(); return; } zoomAt(e.clientX, e.clientY, 1.5); hideHintSoon(); });
 
     // Pencere boyutu değişince minimum ölçek güncelle
     let resizeTimer; window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => {
@@ -535,9 +545,9 @@
     }, 120); });
 
     // Butonlar
-    zoomInBtn.addEventListener('click', () => { const rect = viewer.getBoundingClientRect(); zoomAt(rect.width/2, rect.height/2, 1.2); });
-    zoomOutBtn.addEventListener('click', () => { const rect = viewer.getBoundingClientRect(); zoomAt(rect.width/2, rect.height/2, 0.8333); });
-    resetBtn.addEventListener('click', resetView);
+    zoomInBtn.addEventListener('click', () => { if(controlsLocked) return; const rect = viewer.getBoundingClientRect(); zoomAt(rect.width/2, rect.height/2, 1.2); });
+    zoomOutBtn.addEventListener('click', () => { if(controlsLocked) return; const rect = viewer.getBoundingClientRect(); zoomAt(rect.width/2, rect.height/2, 0.8333); });
+    resetBtn.addEventListener('click', () => { if(controlsLocked) return; resetView(); });
 
     // Tam ekran
     function isFullscreen(){
@@ -565,8 +575,16 @@
       } catch(err){ console.warn(err); }
     }
 
+    // Tam ekranda ayrı sekmede JPG aç (sağ tık ayrı sekmede aç davranışı)
     fullscreenBtn.addEventListener('click', async () => {
-      if(!isFullscreen()) await enterFullscreen(); else await exitFullscreen();
+      const target = img.getAttribute('src');
+      if(!target) return;
+      const jpgUrl = target.replace(/\.(jpe?g|webp|avif)$/i, '.jpg');
+      // JPG varsa onu aç, yoksa mevcut kaynağı aç
+      const test = new Image();
+      test.onload = () => window.open(jpgUrl, '_blank', 'noopener');
+      test.onerror = () => window.open(target, '_blank', 'noopener');
+      test.src = jpgUrl;
     });
 
     exitFsBtn.addEventListener('click', async () => { if(isFullscreen()) await exitFullscreen(); });
