@@ -87,7 +87,7 @@
     .topbar-left { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
     .topbar-right { display: flex; align-items: center; gap: 14px; }
     .poster-title { font-weight: 800; color: #fff; font-size: 15px; letter-spacing: 0.25px; }
-    .poster-meta { color: var(--muted); font-weight: 600; font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .poster-meta { color: var(--muted); font-weight: 600; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
     .byline b { color: #fff; font-weight: 800; }
 
     /* Exit fullscreen floating button */
@@ -402,12 +402,17 @@
     function zoomAt(px, py, factor){
       const before = pointToContent(px, py);
       const newScale = clamp(scale * factor, minScale * 0.98, maxScale);
+      const wasSmall = currentLevel === 'small';
       scale = newScale;
       const afterX = before.x * scale;
       const afterY = before.y * scale;
       tx = px - afterX;
       ty = py - afterY;
       applyTransform();
+      // Mobilde belli bir ölçeğin üstünde detay gerekir -> büyük varyanta yükselt
+      if (wasSmall && scale > minScale * 1.6) {
+        upgradeToLargeIfNeeded();
+      }
     }
 
     function hideHintSoon(){
@@ -428,22 +433,70 @@
       img.src = src; // load event aşağıda resetView çağırır
     }
 
-    // Görsel yüklenemezse yükleme katmanını kaldır ve uyarı yaz
+    // Görsel yüklenemezse: küçük varyant yoksa sessizce büyüğe düş
     img.addEventListener('error', () => {
+      if (fallbackOnError) {
+        const fb = fallbackOnError;
+        fallbackOnError = null;
+        suppressErrorHint = true;
+        img.src = fb;
+        return;
+      }
       loading.style.display = 'none';
       imgReady = true; maybeHideSplash();
-      hint && (hint.style.display = 'block', hint.textContent = 'Görsel yüklenemedi. Dosya adını/görünürlüğünü kontrol edin.');
+      if (!suppressErrorHint) {
+        hint && (hint.style.display = 'block', hint.textContent = 'Görsel yüklenemedi. Dosya adını/görünürlüğünü kontrol edin.');
+      }
+      suppressErrorHint = false;
     });
 
-    // Görselleri önbelleğe al (geçiş hızlı olsun)
-    // Küçük ekranlarda 2x downscale edilmiş görselleri tercih et (varsa)
+    // Mobilde önce küçük, zoom isteğinde büyük görsel (kaliteyi koruyarak) yükle
     const isSmallScreen = window.matchMedia('(max-width: 600px)').matches;
-    const IMG1 = isSmallScreen && false ? 'ekim29-small.jpg' : 'ekim29.jpg';
-    const IMG2 = isSmallScreen && false ? 'ekim29-2-small.jpg' : 'ekim29-2.jpg';
-    ;[IMG1, IMG2].forEach(p => { const im = new Image(); im.src = p; });
+    const VARIANTS = {
+      1: { small: 'ekim29-small.jpg',  large: 'ekim29.jpg' },
+      2: { small: 'ekim29-2-small.jpg', large: 'ekim29-2.jpg' }
+    };
+    let currentImageIndex = 1;
+    let currentLevel = isSmallScreen ? 'small' : 'large';
+    let fallbackOnError = null; // küçük yoksa büyüğe sessiz geçiş
+    let suppressErrorHint = false;
 
-    // İlk görseli JS ile tak - önce eventleri bağlayalım sonra src verelim ki load kaçmasın
-    window.requestAnimationFrame(() => { img.src = IMG1; });
+    function upgradeToLargeIfNeeded(){
+      if(currentLevel === 'large') return;
+      const v = VARIANTS[currentImageIndex]; if(!v) return;
+      const large = v.large;
+      const preload = new Image();
+      preload.src = large;
+      // decode destekliyse takılmasın
+      (preload.decode ? preload.decode() : Promise.resolve()).catch(()=>{}).finally(() => {
+        const centerX = viewer.clientWidth / 2;
+        const centerY = viewer.clientHeight / 2;
+        const before = pointToContent(centerX, centerY);
+        currentLevel = 'large';
+        fallbackOnError = null;
+        const onLoaded = () => {
+          minScale = computeFitScale();
+          const afterX = before.x * scale;
+          const afterY = before.y * scale;
+          tx = centerX - afterX;
+          ty = centerY - afterY;
+          applyTransform();
+          img.removeEventListener('load', onLoaded);
+        };
+        img.addEventListener('load', onLoaded);
+        img.src = large;
+      });
+    }
+
+    // İlk görsel (küçük varsa onu, yoksa büyük)
+    window.requestAnimationFrame(() => {
+      const v = VARIANTS[currentImageIndex];
+      const preferSmall = isSmallScreen;
+      fallbackOnError = preferSmall ? v.large : null;
+      img.src = preferSmall ? v.small : v.large;
+      // Büyük görseli arka planda ısıt
+      const pre = new Image(); pre.src = v.large;
+    });
 
     // Splash minimum süre + görsel hazır olunca kalksın
     let splashMin = false, imgReady = false;
@@ -568,9 +621,23 @@
     document.addEventListener('mozfullscreenchange', onFsChange);
     document.addEventListener('MSFullscreenChange', onFsChange);
 
-    // Görsel seçimi
-    image1Btn.addEventListener('click', () => { setActiveImageButton(1); switchImage(IMG1); });
-    image2Btn.addEventListener('click', () => { setActiveImageButton(2); switchImage(IMG2); });
+    // Görsel seçimi (varyant yönetimi ile)
+    image1Btn.addEventListener('click', () => {
+      setActiveImageButton(1);
+      currentImageIndex = 1;
+      currentLevel = isSmallScreen ? 'small' : 'large';
+      const v = VARIANTS[1];
+      fallbackOnError = currentLevel === 'small' ? v.large : null;
+      switchImage(v[currentLevel]);
+    });
+    image2Btn.addEventListener('click', () => {
+      setActiveImageButton(2);
+      currentImageIndex = 2;
+      currentLevel = isSmallScreen ? 'small' : 'large';
+      const v = VARIANTS[2];
+      fallbackOnError = currentLevel === 'small' ? v.large : null;
+      switchImage(v[currentLevel]);
+    });
 
     // Dokunmatik kaydırma momentumunu engelle (biz kontrol ediyoruz)
     viewer.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
