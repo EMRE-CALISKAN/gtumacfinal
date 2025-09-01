@@ -411,6 +411,7 @@
 
     // Sayfa ilk açılışta merkezde ve sığdırılmış başlasın; görsel yüklenmeden pan/zoom kilitli
     let controlsLocked = true;
+    let imageLayoutReady = false;
 
     function pointToContent(px, py){
       return { x: (px - tx) / scale, y: (py - ty) / scale };
@@ -473,32 +474,43 @@
     let splashMin = false, imgReady = false;
     setTimeout(()=>{ splashMin = true; maybeHideSplash(); }, 1900);
     function maybeHideSplash(){ if(splashMin && imgReady) hideSplash(); }
-    function hideSplash(){ if(!splash || splash.classList.contains('hidden')) return; splash.classList.add('hidden'); setTimeout(()=>{ splash.style.display = 'none'; }, 600); }
+    function hideSplash(){
+      if(!splash || splash.classList.contains('hidden')) return;
+      // Splash kapanmadan hemen önce ilk görünür kare için transformu SENKRON uygula
+      if(!imageLayoutReady){
+        minScale = computeFitScale();
+        scale = minScale;
+        centerImage();
+        applyTransformSync();
+        imageLayoutReady = true;
+      }
+      content.style.visibility = 'visible';
+      controlsLocked = false;
+      splash.classList.add('hidden');
+      setTimeout(()=>{ splash.style.display = 'none'; }, 600);
+    }
 
     img.addEventListener('load', () => {
       loading.style.display = 'none';
       imgReady = true; maybeHideSplash();
-      // Reset hesaplarını yap ama transformu senkron uygula, sonra göster
+      // Reset hesaplarını yap ama transformu senkron uygula
       minScale = computeFitScale();
       scale = minScale;
       centerImage();
       applyTransformSync();
-      // Görsel yüklendi: içeriği görünür yap, etkileşim aç
-      content.style.visibility = 'visible';
-      controlsLocked = false;
+      imageLayoutReady = true;
     });
 
     // Eğer resim cache'ten geldiyse load tetiklenmiş olabilir
     if(img.complete) {
       loading.style.display = 'none';
       imgReady = true; maybeHideSplash();
-      // Reset hesaplarını yap ama transformu senkron uygula, sonra göster
+      // Reset hesaplarını yap ama transformu senkron uygula
       minScale = computeFitScale();
       scale = minScale;
       centerImage();
       applyTransformSync();
-      content.style.visibility = 'visible';
-      controlsLocked = false;
+      imageLayoutReady = true;
     }
 
     // Pan (sürükle)
