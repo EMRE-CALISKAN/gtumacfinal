@@ -357,6 +357,8 @@
     // Çoklu işaretçi (pinch) takibi
     const pointers = new Map();
     let pinchStart = null; // { distance, scale, centerX, centerY }
+    // Son zoom odağı (ekranda sabit tutulacak nokta)
+    let lastAnchorX = null, lastAnchorY = null;
 
     const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
@@ -400,18 +402,21 @@
     }
 
     function zoomAt(px, py, factor){
+      lastAnchorX = px; lastAnchorY = py; // son odak
       const before = pointToContent(px, py);
       const newScale = clamp(scale * factor, minScale * 0.98, maxScale);
-      const wasSmall = currentLevel === 'small';
+      const prevLevel = currentLevel;
       scale = newScale;
       const afterX = before.x * scale;
       const afterY = before.y * scale;
       tx = px - afterX;
       ty = py - afterY;
       applyTransform();
-      // Mobilde belli bir ölçeğin üstünde detay gerekir -> büyük varyanta yükselt
-      if (wasSmall && scale > minScale * 1.6) {
+      // Mobil: eşik üstünde büyük varyanta; fit'e yakınsa küçük varyanta geri
+      if (prevLevel === 'small' && scale > minScale * 1.6) {
         upgradeToLargeIfNeeded();
+      } else if (isSmallScreen && prevLevel === 'large' && scale < minScale * 1.15) {
+        downgradeToSmallIfWanted();
       }
     }
 
@@ -430,7 +435,7 @@
     function switchImage(src){
       if(!src) return;
       loading.style.display = '';
-      img.src = src; // load event aşağıda resetView çağırır
+      img.src = src; // load event aşağıda resetView çağırır (gerekirse suppressResetOnce ile atlanır)
     }
 
     // Görsel yüklenemezse: küçük varyant yoksa sessizce büyüğe düş
@@ -460,6 +465,7 @@
     let currentLevel = isSmallScreen ? 'small' : 'large';
     let fallbackOnError = null; // küçük yoksa büyüğe sessiz geçiş
     let suppressErrorHint = false;
+    let suppressResetOnce = false; // programatik varyant geçişinde resetView'i atla
 
     function upgradeToLargeIfNeeded(){
       if(currentLevel === 'large') return;
@@ -471,15 +477,29 @@
       (preload.decode ? preload.decode() : Promise.resolve()).catch(()=>{}).finally(() => {
         const centerX = viewer.clientWidth / 2;
         const centerY = viewer.clientHeight / 2;
+        // Dünya-koordinatı korunması için normalize koordinatları yakala
+        const oldW = img.naturalWidth; const oldH = img.naturalHeight;
         const before = pointToContent(centerX, centerY);
+        const u = oldW ? (before.x / oldW) : 0.5;
+        const vN = oldH ? (before.y / oldH) : 0.5;
         currentLevel = 'large';
         fallbackOnError = null;
+        suppressResetOnce = true; // load callback resetView yapmasın
         const onLoaded = () => {
-          minScale = computeFitScale();
-          const afterX = before.x * scale;
-          const afterY = before.y * scale;
-          tx = centerX - afterX;
-          ty = centerY - afterY;
+          const newW = img.naturalWidth; const newH = img.naturalHeight;
+          // Aynı görsel büyüklüğünü korumak için ölçeği doğal boyut oranına göre ayarla
+          const ratio = (oldW && newW) ? (oldW / newW) : 1;
+          const newMin = computeFitScale();
+          scale = clamp(scale * ratio, newMin * 0.98, maxScale);
+          minScale = newMin;
+          // Eğer kullanıcı bir odak belirlediyse onu koru, yoksa ekran merkezini kullan
+          const ax = lastAnchorX ?? centerX;
+          const ay = lastAnchorY ?? centerY;
+          const before2 = pointToContent(ax, ay);
+          const afterX = before2.x * scale;
+          const afterY = before2.y * scale;
+          tx = ax - afterX;
+          ty = ay - afterY;
           applyTransform();
           img.removeEventListener('load', onLoaded);
         };
@@ -493,6 +513,7 @@
       const v = VARIANTS[currentImageIndex];
       const preferSmall = isSmallScreen;
       fallbackOnError = preferSmall ? v.large : null;
+      // İlk yüklemede resetView çalışsın ki görsel ortalansın ve fit'e sığsın
       img.src = preferSmall ? v.small : v.large;
       // Büyük görseli arka planda ısıt
       const pre = new Image(); pre.src = v.large;
@@ -507,14 +528,20 @@
     img.addEventListener('load', () => {
       loading.style.display = 'none';
       imgReady = true; maybeHideSplash();
-      resetView();
+      if (!suppressResetOnce) {
+        resetView();
+      }
+      suppressResetOnce = false;
     });
 
     // Eğer resim cache'ten geldiyse load tetiklenmiş olabilir
     if(img.complete) {
       loading.style.display = 'none';
       imgReady = true; maybeHideSplash();
-      resetView();
+      if (!suppressResetOnce) {
+        resetView();
+      }
+      suppressResetOnce = false;
     }
 
     // Pan (sürükle)
@@ -542,12 +569,15 @@
         const dx = pts[1].x - pts[0].x; const dy = pts[1].y - pts[0].y;
         const distance = Math.hypot(dx, dy); const centerX = (pts[0].x + pts[1].x) / 2; const centerY = (pts[0].y + pts[1].y) / 2;
         const factor = distance / pinchStart.distance; const targetScale = clamp(pinchStart.scale * factor, minScale * 0.98, maxScale);
+        lastAnchorX = centerX; lastAnchorY = centerY; // pinch sırasında odak
         const before = pointToContent(pinchStart.centerX, pinchStart.centerY);
         scale = targetScale; const afterX = before.x * scale; const afterY = before.y * scale;
         tx = pinchStart.centerX - afterX; ty = pinchStart.centerY - afterY; applyTransform();
-        // İki parmak zoom'da da büyük varyanta yükselt
+        // İki parmak zoom'da büyük varyanta yükseltme / küçük varyanta geri dönüş
         if (currentLevel === 'small' && scale > minScale * 1.6) {
           upgradeToLargeIfNeeded();
+        } else if (isSmallScreen && currentLevel === 'large' && scale < minScale * 1.15) {
+          downgradeToSmallIfWanted();
         }
       }
     }
@@ -563,6 +593,43 @@
 
     // Çift tık/tap: yakınlaştır, Shift ile reset
     viewer.addEventListener('dblclick', (e) => { if(e.shiftKey){ resetView(); return; } zoomAt(e.clientX, e.clientY, 1.5); hideHintSoon(); });
+
+    // Küçük varyanta geri dönüş (mobilde fit'e yakınlaştığında)
+    function downgradeToSmallIfWanted(){
+      if (!isSmallScreen) return;
+      if (currentLevel !== 'large') return;
+      const v = VARIANTS[currentImageIndex]; if (!v || !v.small) return;
+      const centerX = viewer.clientWidth / 2;
+      const centerY = viewer.clientHeight / 2;
+      const oldW = img.naturalWidth; const oldH = img.naturalHeight;
+      const before = pointToContent(centerX, centerY);
+      const u = oldW ? (before.x / oldW) : 0.5;
+      const vN = oldH ? (before.y / oldH) : 0.5;
+
+      const preload = new Image(); preload.src = v.small;
+      (preload.decode ? preload.decode() : Promise.resolve()).catch(()=>{}).finally(() => {
+        currentLevel = 'small';
+        suppressResetOnce = true; // resetleme yok
+        const onLoaded = () => {
+          const newW = img.naturalWidth; const newH = img.naturalHeight;
+          const ratio = (oldW && newW) ? (oldW / newW) : 1;
+          const newMin = computeFitScale();
+          scale = clamp(scale * ratio, newMin * 0.98, maxScale);
+          minScale = newMin;
+          const ax = lastAnchorX ?? centerX;
+          const ay = lastAnchorY ?? centerY;
+          const before2 = pointToContent(ax, ay);
+          const afterX = before2.x * scale;
+          const afterY = before2.y * scale;
+          tx = ax - afterX;
+          ty = ay - afterY;
+          applyTransform();
+          img.removeEventListener('load', onLoaded);
+        };
+        img.addEventListener('load', onLoaded);
+        img.src = v.small;
+      });
+    }
 
     // Pencere boyutu değişince minimum ölçek güncelle
     let resizeTimer; window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => {
@@ -629,17 +696,21 @@
     image1Btn.addEventListener('click', () => {
       setActiveImageButton(1);
       currentImageIndex = 1;
+      const prevLevel = currentLevel;
       currentLevel = isSmallScreen ? 'small' : 'large';
       const v = VARIANTS[1];
       fallbackOnError = currentLevel === 'small' ? v.large : null;
+      suppressResetOnce = (prevLevel !== currentLevel); // geçişte resetleme
       switchImage(v[currentLevel]);
     });
     image2Btn.addEventListener('click', () => {
       setActiveImageButton(2);
       currentImageIndex = 2;
+      const prevLevel = currentLevel;
       currentLevel = isSmallScreen ? 'small' : 'large';
       const v = VARIANTS[2];
       fallbackOnError = currentLevel === 'small' ? v.large : null;
+      suppressResetOnce = (prevLevel !== currentLevel);
       switchImage(v[currentLevel]);
     });
 
